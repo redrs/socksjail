@@ -1,14 +1,8 @@
 #!/bin/bash
 
-# * The user will be subject to the iptables rules on the server 
-#   - you might need to add outgoing rules for new user.
-#
-# * Do not use passwords for auth, use ssh public key authentication.
-
 # TO DO:
-# * Account age limit then auto rm of CELL_ramdom_username
+# * Account age limit with auto rm of CELL_ramdom_username
 # * SElinux policy for RH systems set to enforcing
-# * More testing.
 
 # eg will place each jail in /home/theslammer/CELL_ramdom_username
 JAILDIR="/home/theslammer"
@@ -102,9 +96,9 @@ echo -e " User account will be: $NEWNAME"
 echo -e " Will build jail at: $JAILDIR/CELL_$NEWNAME \n"
 
 # add user
-mkdir $JAILDIR/CELL_$NEWNAME
-useradd $NEWNAME -G $JAILGRP
-$JKINIT -j $JAILDIR/CELL_$NEWNAME/ netbasics
+mkdir $JAILDIR/CELL_$NEWNAME || fail "could not create $JAILDIR/CELL_$NEWNAME"
+useradd $NEWNAME -G $JAILGRP || fail "could not adduser"
+$JKINIT -j $JAILDIR/CELL_$NEWNAME/ netbasics || fail "jk_init failed"
 
 # /bin/false just needs to exist, jailkit fails without
 mkdir $JAILDIR/CELL_$NEWNAME/bin
@@ -127,15 +121,15 @@ chown $NEWNAME:$NEWNAME $JAILDIR/CELL_$NEWNAME/home/* -R
 # password the account (otherwise passwordless accounts are locked)
 genpass
 usermod -p $(echo $ACPASSWD | openssl passwd -1 -stdin) $NEWNAME
-echo " account password is: $ACPASSWD"
+#echo " account password is: $ACPASSWD"
 
 echo -e "\n Created jail!\n"
 
 # helpful hint
-if [ `grep "AllowUsers" /etc/ssh/sshd_config | grep -v ^# | wc -c` -eq 0 ]; then
-        echo " * tip: you should use the 'AllowUsers' setting in sshd_config!!!"
+if [ `grep -i -e "AllowGroup" -e "AllowUsers" /etc/ssh/sshd_config | grep -v ^# | wc -c` -eq 0 ]; then
+	echo " * tip: you should use the 'AllowUsers' or 'AllowGroup' setting in sshd_config!!!"
 else
-        echo " remember to add user to 'AllowUsers' in sshd_config and restart it."
+        echo " remember to add user to AllowUsers or AllowGroup in sshd_config and restart it."
 fi
 
 echo -e "\nAdd users public key to: $JAILDIR/CELL_$NEWNAME/home/$NEWNAME/.ssh/$AUTHKEYNAME"
