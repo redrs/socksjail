@@ -2,9 +2,7 @@ About
 ==============
 This script will generate/create a random user account and use Jailkit to chrooted it. There will be no access to a shell of anykind. This account is then to be used only for using SSHs socks proxy. 
 
-This script has been tested on
-Debian 6
-CentOS release 6.4 
+This script has been tested on Debian 6 and CentOS release 6.4.
 
 Uses
 ==============
