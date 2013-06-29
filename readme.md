@@ -2,7 +2,9 @@ About
 ==============
 This script will generate/create a random user account and use Jailkit to chrooted it. There will be no access to a shell of anykind. This account is then to be used only for using SSHs socks proxy. 
 
-Should work fine on Debian and CentOS.
+This script has been tested on
+Debian 6
+CentOS release 6.4 
 
 Uses
 ==============
@@ -24,10 +26,12 @@ Logs:
 * If "LogLevel DEBUG" is set in sshd_config then be aware that surfing history will be logged.
 * If you use a Grsecurity patched Kernel and have enabled logging of execs within a chroot then execs will be logged (there should not be any!).
 
-TO DO:
+TO DO (maybe):
 * account lifespan then auto rm of CELL_ramdom_username.
-* SElinux policy for RH systems set to enforcing.
+* SElinux policy for RH systems with it set as enforcing.
 * Maybe add password support.
+* Maybe alter sshd_config and add user to AllowUsers or AllowGroup.
+* Maybe generate some iptables rules for the user.
 
 Jailkit
 ==============
@@ -36,6 +40,8 @@ http://olivier.sessink.nl/jailkit/index.html
 "Jailkit is a set of utilities to limit user accounts to specific files using chroot() and or specific commands. Setting up a chroot shell, a shell limited to some specific command, or a daemon inside a chroot jail is a lot easier and can be automated using these utilities."
 
 Installation is usually as easy as downloading the code, checking the signature. Then a simple: 
+
 ./configure && make
+
 sudo make install
 
