@@ -1,15 +1,16 @@
 #!/bin/bash
 
-# TO DO:
-# * Account age limit with auto rm of CELL_ramdom_username
-# * SElinux policy for RH systems set to enforcing
-
 # eg will place each jail in /home/theslammer/CELL_ramdom_username
 JAILDIR="/home/theslammer"
 
 # Filename set in sshd_config for AuthorizedKeysFile
 # tip: using a random filename could help avoid key injection attacks
 AUTHKEYNAME="authorized_keys"
+
+# Generate a ssh key for the user?
+SSHGENKEY="y"
+# generate/set a Password for the key?
+SSHKEYPW="y"
 
 # group to put all the jailed uses in. Will create if does not exist
 JAILGRP="jailed"
@@ -66,14 +67,6 @@ JKINIT=`which jk_init`
 JKJUSR=`which jk_jailuser`
 [ ! -f "$JKINIT" ] && fail "please install jailkit!\nhttp://olivier.sessink.nl/jailkit/"
 
-# distro?
-if [ -f "/etc/redhat-release" ]; then
-	DIST="RHEL"
-fi
-if [ -f "/etc/debian_version" ]; then
-	DIST="DEBI"
-fi
-
 # make jailhouse
 if [ ! -d "$JAILDIR" ]; then
         echo -e "\n $JAILDIR does not exist, creating. "
@@ -117,20 +110,38 @@ chmod 744 $JAILDIR/CELL_$NEWNAME/home/$NEWNAME/.ssh
 touch $JAILDIR/CELL_$NEWNAME/home/$NEWNAME/.ssh/$AUTHKEYNAME
 chmod 400 $JAILDIR/CELL_$NEWNAME/home/$NEWNAME/.ssh/$AUTHKEYNAME
 chown $NEWNAME:$NEWNAME $JAILDIR/CELL_$NEWNAME/home/* -R
+echo 
+
+# are we generating the sshkey on the server too?
+if [ "$SSHGENKEY" = "y" ]; then
+        if [ "$SSHKEYPW" = "y"  ]; then
+                SSHKEYPWPASS=`genpass`
+                SSHKEYPW="-N $SSHKEYPWPASS"
+                echo " [!] Password for "$NEWNAME"_id_rsa will be: $SSHKEYPWPASS"
+        else
+                SSHKEYPW=""
+        fi
+        echo -e " [*] Generating ssh key"
+        ssh-keygen -q -t rsa -b 4096 -f "$NEWNAME"_id_rsa -N "$SSHKEYPWPASS" || fail "could not create sshkey"
+        cat "$NEWNAME"_id_rsa.pub > $JAILDIR/CELL_$NEWNAME/home/$NEWNAME/.ssh/$AUTHKEYNAME
+        rm "$NEWNAME"_id_rsa.pub -f
+fi
 
 # password the account (otherwise passwordless accounts are locked)
-genpass
-usermod -p $(echo $ACPASSWD | openssl passwd -1 -stdin) $NEWNAME
-#echo " account password is: $ACPASSWD"
-
-echo -e "\n Created jail!\n"
+ACPASSWD=`genpass`
+usermod -p $( echo $ACPASSWD | openssl passwd -1 -stdin) $NEWNAME || fail "could no change users password"
+#echo " [!] account password is: $ACPASSWD"
 
 # helpful hint
 if [ `grep -i -e "AllowGroup" -e "AllowUsers" /etc/ssh/sshd_config | grep -v ^# | wc -c` -eq 0 ]; then
-	echo " * tip: you should use the 'AllowUsers' or 'AllowGroup' setting in sshd_config!!!"
+        echo " [*] tip: you should use the 'AllowUsers' or 'AllowGroup' setting in sshd_config!!!"
 else
-        echo " remember to add user to AllowUsers or AllowGroup in sshd_config and restart it."
+        echo " [!] remember to add user to AllowUsers or AllowGroup in sshd_config and restart it."
 fi
 
-echo -e "\nAdd users public key to: $JAILDIR/CELL_$NEWNAME/home/$NEWNAME/.ssh/$AUTHKEYNAME"
-echo -e "\n"
+if [ "$SSHGENKEY" != "y" ]; then
+        echo -e "\n [!] Add users public key to: $JAILDIR/CELL_$NEWNAME/home/$NEWNAME/.ssh/$AUTHKEYNAME"
+fi
+
+echo -e "\n [*] Created jail!\n"
+exit
