@@ -7,10 +7,15 @@ JAILDIR="/home/theslammer"
 # tip: using a random filename could help avoid key injection attacks
 AUTHKEYNAME="authorized_keys"
 
-# Generate a ssh key for the user?
-SSHGENKEY="y"
-# generate/set a Password for the key?
-SSHKEYPW="y"
+# Generate ssh keys on this server? OR use ./jailbuild.sh genkey
+SSHGENKEY="n"
+# Place the generated private key and server details in a file
+# that is encrypted with pgp. Passphrase to decrypt this will be 
+# randomly generated and output to screen.
+SERVERDETAILS="y"
+# ssh details
+SERVERIP="192.168.100.50"
+SERVERPORT="22"
 
 # group to put all the jailed uses in. Will create if does not exist
 JAILGRP="jailed"
@@ -57,7 +62,7 @@ genpass () {
 	NUM2=`od -vAn -N4 -tu4 < /dev/urandom`
 	WORD1=`genname`
 	WORD2=`genname`
-	ACPASSWD=`echo $NUM1 $WORD1 $NUM2 $WORD2 | tr -d ' '`
+	echo $NUM1 $WORD1 $NUM2 $WORD2;
 }
 
 # Checks
@@ -85,62 +90,78 @@ newuser
 # check random user name
 namecheck
 
-echo -e " User account will be: $NEWNAME"
-echo -e " Will build jail at: $JAILDIR/CELL_$NEWNAME \n"
+echo -e "\n [*] User account will be: $NEWNAME"
+echo -e "     Building jail at: $JAILDIR/CELL_$NEWNAME"
 
 # add user
-mkdir $JAILDIR/CELL_$NEWNAME || fail "could not create $JAILDIR/CELL_$NEWNAME"
-useradd $NEWNAME -G $JAILGRP || fail "could not adduser"
-$JKINIT -j $JAILDIR/CELL_$NEWNAME/ netbasics || fail "jk_init failed"
+mkdir $JAILDIR/CELL_$NEWNAME &> /dev/null || fail "could not create $JAILDIR/CELL_$NEWNAME"
+useradd $NEWNAME -G $JAILGRP  &> /dev/null || fail "could not run useradd $NEWNAME"
 
-# /bin/false just needs to exist, jailkit fails without
-mkdir $JAILDIR/CELL_$NEWNAME/bin
-cp /bin/false $JAILDIR/CELL_$NEWNAME/bin
+# password the account
+ACPASSWD=`genpass`
+usermod -p $( echo $ACPASSWD | openssl passwd -1 -stdin) $NEWNAME || fail "could not set users system password, is /etc/passwd locked?"
+
+# build jail for user
+$JKINIT -j $JAILDIR/CELL_$NEWNAME/ netbasics  &> /dev/null || fail "jk_init failed"
+mkdir $JAILDIR/CELL_$NEWNAME/bin 
+cp /bin/false $JAILDIR/CELL_$NEWNAME/bin 
 chown root:root $JAILDIR/CELL_$NEWNAME/bin
-chmod 500 $JAILDIR/CELL_$NEWNAME/bin
-$JKJUSR -s /bin/false -m -j $JAILDIR/CELL_$NEWNAME/ $NEWNAME
-
-mkdir $JAILDIR/CELL_$NEWNAME/home/$NEWNAME/.ssh/ -p
+chmod 500 $JAILDIR/CELL_$NEWNAME/bin 
+$JKJUSR -s /bin/false -m -j $JAILDIR/CELL_$NEWNAME/ $NEWNAME &> /dev/null || fail "jk_addjailuser failed"
+mkdir $JAILDIR/CELL_$NEWNAME/home/$NEWNAME/.ssh/ -p 
 chmod 755 $JAILDIR/CELL_$NEWNAME/home/$NEWNAME/
-chmod 755 $JAILDIR/CELL_$NEWNAME/
-chmod 755 $JAILDIR/CELL_$NEWNAME/*
-chmod 444 $JAILDIR/CELL_$NEWNAME/etc/*
+chmod 755 $JAILDIR/CELL_$NEWNAME/ 
+chmod 755 $JAILDIR/CELL_$NEWNAME/* 
+chmod 444 $JAILDIR/CELL_$NEWNAME/etc/* 
 # .ssh
-chmod 744 $JAILDIR/CELL_$NEWNAME/home/$NEWNAME/.ssh
-touch $JAILDIR/CELL_$NEWNAME/home/$NEWNAME/.ssh/$AUTHKEYNAME
+chmod 744 $JAILDIR/CELL_$NEWNAME/home/$NEWNAME/.ssh 
+touch $JAILDIR/CELL_$NEWNAME/home/$NEWNAME/.ssh/$AUTHKEYNAME 
 chmod 400 $JAILDIR/CELL_$NEWNAME/home/$NEWNAME/.ssh/$AUTHKEYNAME
 chown $NEWNAME:$NEWNAME $JAILDIR/CELL_$NEWNAME/home/* -R
-echo 
 
 # are we generating the sshkey on the server too?
-if [ "$SSHGENKEY" = "y" ]; then
-        if [ "$SSHKEYPW" = "y"  ]; then
-                SSHKEYPWPASS=`genpass`
-                SSHKEYPW="-N $SSHKEYPWPASS"
-                echo " [!] Password for "$NEWNAME"_id_rsa will be: $SSHKEYPWPASS"
-        else
-                SSHKEYPW=""
-        fi
+if [[ "$SSHGENKEY" = "y" || "$1" = "genkey" ]]; then
+	SSHKEYPWPASS=`genpass`
+        SSHKEYPW="-N $SSHKEYPWPASS"
+        if [ "$SERVERDETAILS" != "y"  ]; then
+		echo " [!] Password for "$NEWNAME"_id_rsa will be: $SSHKEYPWPASS"
+	fi
         echo -e " [*] Generating ssh key"
-        ssh-keygen -q -t rsa -b 4096 -f "$NEWNAME"_id_rsa -N "$SSHKEYPWPASS" || fail "could not create sshkey"
-        cat "$NEWNAME"_id_rsa.pub > $JAILDIR/CELL_$NEWNAME/home/$NEWNAME/.ssh/$AUTHKEYNAME
+	ssh-keygen -q -t rsa -b 4096 -f "$NEWNAME"_id_rsa -N "$SSHKEYPWPASS" -C "" || fail "could not create sshkey"
+	cat "$NEWNAME"_id_rsa.pub > $JAILDIR/CELL_$NEWNAME/home/$NEWNAME/.ssh/$AUTHKEYNAME
         rm "$NEWNAME"_id_rsa.pub -f
+	if [ "$SERVERDETAILS" = "y" ]; then
+		echo -e " [*] Encrypting ssh key"
+		THEKEY=`cat "$NEWNAME"_id_rsa`	
+		DETAILS="Name/Server/Port:\n$NEWNAME@$SERVERIP:$SERVERPORT\n"
+                SERVERPRINTS="`ssh-keygen -l -f /etc/ssh/ssh_host_rsa_key.pub`\n`ssh-keygen -l -f /etc/ssh/ssh_host_dsa_key`"
+                SERVERPRINT="Server fingerprints (PLEASE check!):\n$SERVERPRINTS"
+		KEYPW="Private key password:\n$SSHKEYPWPASS\n"
+		NOTECRYPT="`genpass``genpass`"
+		exec 5<<<"$NOTECRYPT"	
+		PGP=`which gpg` || fail "could not find gpg"
+		# encrypt details
+		echo -e "Here are your proxy server details:\n\n$DETAILS\n$SERVERPRINT\n\n$KEYPW\n\n$THEKEY" \
+		| $PGP --batch --passphrase-fd 5 --symmetric --cipher-algo AES --armor --output "$NEWNAME"_details.gpg \
+		|| fail "could not encrypt server details with pgp"
+		rm "$NEWNAME"_id_rsa
+		echo " [!] Password for details file is: $NOTECRYPT"
+		echo " [!] Give the user the gpg file and communicate the password over another [secure] channel."
+		echo
+		exec 5<<<""		
+	fi
+	# set jail to READ ONLY as key has been installed
+	chattr +i -R $JAILDIR/CELL_$NEWNAME/* &> /dev/null
+else
+	echo -e "\n [!] Add users public key to: $JAILDIR/CELL_$NEWNAME/home/$NEWNAME/.ssh/$AUTHKEYNAME"
+	echo " [*] then run: chattr +i -R $JAILDIR/CELL_$NEWNAME/*"
 fi
-
-# password the account (otherwise passwordless accounts are locked)
-ACPASSWD=`genpass`
-usermod -p $( echo $ACPASSWD | openssl passwd -1 -stdin) $NEWNAME || fail "could no change users password"
-#echo " [!] account password is: $ACPASSWD"
 
 # helpful hint
 if [ `grep -i -e "AllowGroup" -e "AllowUsers" /etc/ssh/sshd_config | grep -v ^# | wc -c` -eq 0 ]; then
-        echo " [*] tip: you should use the 'AllowUsers' or 'AllowGroup' setting in sshd_config!!!"
+	echo -e " [*] tip: you should use the 'AllowUsers' and/or 'AllowGroup' settings in sshd_config!"
 else
-        echo " [!] remember to add user to AllowUsers or AllowGroup in sshd_config and restart it."
-fi
-
-if [ "$SSHGENKEY" != "y" ]; then
-        echo -e "\n [!] Add users public key to: $JAILDIR/CELL_$NEWNAME/home/$NEWNAME/.ssh/$AUTHKEYNAME"
+        echo -e "\n [!] remember to add user to AllowUsers or AllowGroup in sshd_config and restart it."
 fi
 
 echo -e "\n [*] Created jail!\n"
