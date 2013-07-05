@@ -158,10 +158,10 @@ else
 fi
 
 # helpful hint
-if [ `grep -i -e "AllowGroup" -e "AllowUsers" /etc/ssh/sshd_config | grep -v ^# | wc -c` -eq 0 ]; then
-	echo -e " [*] tip: you should use the 'AllowUsers' and/or 'AllowGroup' settings in sshd_config!"
+if [ `grep -i -e "AllowGroups" -e "AllowUsers" /etc/ssh/sshd_config | grep -v ^# | wc -c` -eq 0 ]; then
+	echo -e " [*] tip: you should use the 'AllowUsers' and/or 'AllowGroups' settings in sshd_config!"
 else
-        echo -e "\n [!] remember to add user to AllowUsers or AllowGroup in sshd_config and restart it."
+        echo -e "\n [!] remember to add user to AllowUsers or AllowGroups in sshd_config and restart it."
 fi
 
 echo -e "\n [*] Created jail!\n"

@@ -18,10 +18,10 @@ There is an option for generating SSH keys on the server (set in the script or r
 	- Send the encrypted file to the recipient. It’s base 64 encoded so can be emailed safely or sent over IM etc.
 	- Give the recipient the password to decrypt the file over a different (safe and ideally encrypted) communication channel.
 
-This script has been tested on Debian 6 and CentOS. 
-
 Server
 ==============
+This script has been tested on Debian 6 and CentOS Servers. 
+
 - Limit which users can SSH into your server. In sshd_config I use:
 	- AllowUsers admin1 admin2
 	- AllowGroups jailed
@@ -38,8 +38,9 @@ Clients
 The client might want to firewall off their host to only send/receive traffic from the server to stop leaks (a number of programs with socks proxy support will try to resolve DNS queries themselves, hence leaking). An iptables script is included for that.
 
 The client will then probably run something like:
+*ssh -D8080 -f -C -q -N -o "VerifyHostKeyDNS no" -p 2222 -i /media/crypt/sshkey user@192.168.100.50 -v*
 
-ssh -D8080 -f -C -q -N -o "VerifyHostKeyDNS no" -p 2222 -i /media/crypt/sshkey user@192.168.100.50 -v
+Reaching other servers from your proxy is easy, run the command above with *-L 127.0.0.1:2020:192.168.200.20:22* and then open another terminal and run *ssh someuser@127.0.0.1 -p 2020* to SSH into 200.20 via 100.50.
 
 TO DO list:
 ==============
